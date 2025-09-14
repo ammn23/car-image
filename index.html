@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Damage Detector</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; text-align: center; margin: 0; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 50px auto; padding: 30px; background-color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 8px; }
+        h1 { color: #333; }
+        #image-preview { display: none; max-width: 100%; height: auto; margin-top: 20px; border-radius: 4px; border: 1px solid #ddd; }
+        .upload-area { border: 2px dashed #007bff; border-radius: 8px; padding: 40px; margin: 20px 0; cursor: pointer; background-color: #f8f9fa; }
+        .upload-area p { margin: 0; color: #555; }
+        .button-group { display: flex; justify-content: center; gap: 10px; margin-top: 15px; }
+        button { font-size: 1.1em; padding: 12px 25px; cursor: pointer; border: none; border-radius: 5px; transition: background-color 0.3s; }
+        #check-button { background-color: #007bff; color: white; }
+        #check-button:hover { background-color: #0056b3; }
+        #check-button:disabled { background-color: #aaa; cursor: not-allowed; }
+        #delete-button { background-color: #dc3545; color: white; display: none; }
+        #delete-button:hover { background-color: #c82333; }
+        #results { margin-top: 30px; font-size: 1.1em; text-align: left; }
+        #results ul { list-style-type: none; padding: 0; }
+        #results li { background-color: #e9ecef; padding: 10px; margin-bottom: 8px; border-radius: 4px; }
+        #results .confidence { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🚗 Car Damage Detector</h1>
+        <p>Upload a photo to automatically check for scratches, dents, or rust.</p>
+
+        <div class="upload-area" id="upload-area">
+            <p>Click here or drag & drop an image</p>
+        </div>
+
+        <input type="file" id="image-upload" accept="image/*" hidden>
+
+        <div class="button-group">
+            <button id="check-button" disabled>Check for Damage</button>
+            <button id="delete-button">Delete</button>
+        </div>
+
+        <img id="image-preview" src="" alt="Your uploaded image">
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // ⚠️ IMPORTANT: REPLACE THIS URL with your actual Hugging Face Space URL!
+        const API_URL = "https://amn23-car-image-classification.hf.space/detect";
+
+        const uploadArea = document.getElementById('upload-area');
+        const imageUpload = document.getElementById('image-upload');
+        const checkButton = document.getElementById('check-button');
+        const imagePreview = document.getElementById('image-preview');
+        const resultsDiv = document.getElementById('results');
+        const deleteButton = document.getElementById('delete-button');
+        let selectedFile = null;
+
+        uploadArea.addEventListener('click', () => imageUpload.click());
+        imageUpload.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            selectedFile = event.target.files[0];
+            if (selectedFile) {
+                imagePreview.src = URL.createObjectURL(selectedFile);
+                imagePreview.style.display = 'block';
+                checkButton.disabled = false;
+                // --- THIS IS THE FIXED LINE ---
+                deleteButton.style.display = 'inline-block'; // Show delete button
+                // --- END OF FIX ---
+                resultsDiv.innerHTML = '';
+            }
+        }
+
+        deleteButton.addEventListener('click', () => {
+            selectedFile = null;
+            imageUpload.value = '';
+            imagePreview.src = '';
+            imagePreview.style.display = 'none';
+            resultsDiv.innerHTML = '';
+            checkButton.disabled = true;
+            deleteButton.style.display = 'none';
+        });
+
+        checkButton.addEventListener('click', async () => {
+            if (!selectedFile) {
+                alert("Please select an image first!");
+                return;
+            }
+
+            resultsDiv.innerHTML = "<p>Analyzing, please wait... 🧐</p>";
+            checkButton.disabled = true;
+            deleteButton.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayResults(data.detections);
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style="color: red;">An error occurred: ${error.message}</p>`;
+                console.error("Error:", error);
+            } finally {
+                checkButton.disabled = false;
+                deleteButton.disabled = false;
+            }
+        });
+
+        function displayResults(detections) {
+            if (detections.length === 0) {
+                resultsDiv.innerHTML = "<p>✅ No damage detected!</p>";
+                return;
+            }
+
+            let html = "<h3>Detected Issues:</h3><ul>";
+            detections.forEach(det => {
+                const confidence = (det.confidence * 100).toFixed(1);
+                html += `<li><strong>${det.name}</strong> <span class="confidence">(${confidence}%)</span></li>`;
+            });
+            html += "</ul>";
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+
+</body>
+</html>
